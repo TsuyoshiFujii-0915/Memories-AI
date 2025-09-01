@@ -18,7 +18,7 @@
   - 必ず次のドキュメントを参照して使用すること（https://platform.openai.com/docs/api-reference/responses）
 - Agent SDK: OpenAI Agents SDK
   - 必ず次のドキュメントを参照して使用すること（https://openai.github.io/openai-agents-python/）
-- キャラクター: まずは一般的な女性キャラクターとし、プロンプトで詳細のチューニングができるようにする。
+- キャラクター: まずは一般的な女性キャラクターとし、プロンプトで詳細のチューニングができるようにする。キャラクター画像は当面ダミーを使用する。
 
 ### 要件 3. 記憶について
 
@@ -111,27 +111,27 @@
     - 単一ユーザーかつ単一セッション前提のため、固定セッションID（例: `default`）。
     - 必要に応じて Agents SDK の `SQLiteSession` をオプション採用（トークン節約）。
 
-- Responses API 呼び出し（要点）
-  - 基本形（同期）
-    ```python
-    from openai import OpenAI
-    client = OpenAI()
+  - Responses API 呼び出し（要点）
+    - 基本形（同期）
+      ```python
+      from openai import OpenAI
+      client = OpenAI()
 
-    response = client.responses.create(
-        model=OPENAI_MODEL,  # 既定: "gpt-5-mini"
-        input=merged_text  # ユーザー発話 + 必要時メモリ結合テキスト
-    )
+      response = client.responses.create(
+          model=OPENAI_MODEL,  # 既定: "gpt-5-mini"
+          input=merged_text  # ユーザー発話 + 必要時メモリ結合テキスト
+      )
 
-    # 出力テキスト抽出（Responses API の response.output[*].content[*].text を想定）
-    def extract_text(resp):
-        for item in (resp.output or []):
-            if item.get("type") == "message":
-                for part in item.get("content", []):
-                    if part.get("type") == "output_text":
-                        return part.get("text")
-        return ""
-    ```
-  - ストリーミングは後述のフロントエンド仕様と整合すれば SSE/WebSocket で拡張可。
+      # 出力テキスト抽出（Responses API の response.output[*].content[*].text を想定）
+      def extract_text(resp):
+          for item in (resp.output or []):
+              if item.get("type") == "message":
+                  for part in item.get("content", []):
+                      if part.get("type") == "output_text":
+                          return part.get("text")
+          return ""
+      ```
+    - ストリーミングは初期から SSE で提供する。
 
 - メモリ設計（ファイル仕様）
   - 短期メモリ（`memory/short/YYYY-MM-DD.md`）
@@ -178,9 +178,9 @@
     - 入力: `{ message: string, sessionId?: string }`
     - 処理: Agents SDK Runner でツール利用を許可。ツールで取得したメモリを結合し Responses API で応答生成。短期メモリに追記、必要なら長期抽出。
     - 出力: `{ message: string, usage?: {...}, memoryActions?: {...} }`
-  - `GET /api/memory/short?date=YYYY-MM-DD`
-  - `GET /api/memory/long`
-  - （オプション）`GET /api/chat/stream`（SSE）
+    - `GET /api/memory/short?date=YYYY-MM-DD`
+    - `GET /api/memory/long`
+    - `GET /api/chat/stream`（SSE）
 
 - エラーハンドリング/制御
   - OpenAI API 失敗時: リトライ（指数バックオフ）→ フォールバックメッセージ。
@@ -193,15 +193,15 @@
   - Vite + React + TypeScript
   - 状態管理は軽量（React 内部 state / Context）
 
-- UI 仕様
-  - 画面下部: 入力フィールド（送信ボタン/Enter送信）
-  - 入力欄上: セッション内のメッセージリスト（ユーザー/AI の吹き出し）
-  - 右側: キャラクター画像表示枠（将来的に動画/CGに拡張可）
-  - 背景: `#A1C1E6`、テキスト: `#101010`
+  - UI 仕様
+    - 画面下部: 入力フィールド（送信ボタン/Enter送信）
+    - 入力欄上: セッション内のメッセージリスト（ユーザー/AI の吹き出し）
+    - 右側: キャラクター画像表示枠（初期はダミー画像、将来的に動画/CGに拡張可）
+    - 背景: `#A1C1E6`、テキスト: `#101010`
 
-- API 通信
-  - `POST /api/chat` を叩いて非ストリーム応答表示（初期）。
-  - 将来: `EventSource` で `/api/chat/stream` を購読してストリーム表示。
+  - API 通信
+    - 初期から `EventSource` で `/api/chat/stream` を購読してストリーム表示。
+    - 必要に応じて `POST /api/chat` をフォールバック用に提供する。
 
 - コンポーネント（例）
   - `ChatApp`（全体）
@@ -294,10 +294,10 @@
 - 結合: `POST /api/chat` が短期メモリに追記され、必要時に長期へ抽出されること。
 - 疎通: OPENAI_API_KEY 未設定時の安全な失敗とエラーメッセージ。
 
-### オープン事項（要確認）
+### 決定事項（2025-03-09）
 
-1) バックエンドは `FastAPI` で問題ありませんか？（Flask等の希望があれば変更可）
-2) ストリーミング（SSE/WebSocket）対応は初期から必要ですか？（非ストリームから開始可）
-3) キャラクター画像の用意はありますか？（ダミー画像で開始も可）
-4) メモリ格納先はリポジトリ直下 `./memory` で良いですか？（別パス希望があれば指定ください）
-5) モデル名は既定 `gpt-5-mini` としますが、運用上は `OPENAI_MODEL` で上書きします。初期値はこれで良いですか？
+- バックエンドは `FastAPI` を採用する。
+- ストリーミング対応は初期から SSE で実装する。
+- キャラクター画像は当面ダミー画像を使用する。
+- メモリ格納先はリポジトリ直下 `./memory` とする。
+- モデル名は既定 `gpt-5-mini` とし、`OPENAI_MODEL` で上書き可能。
