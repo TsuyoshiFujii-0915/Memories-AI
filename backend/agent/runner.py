@@ -4,10 +4,11 @@ import os
 from typing import Generator, Optional
 
 from openai import OpenAI
+from ..config import get_client, model_name
 
 
 def _get_model() -> str:
-    return os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    return model_name()
 
 
 def complete_text(merged_text: str, model: Optional[str] = None) -> tuple[str, dict]:
@@ -15,7 +16,11 @@ def complete_text(merged_text: str, model: Optional[str] = None) -> tuple[str, d
 
     Uses the official OpenAI Python client and the Responses API as per docs.
     """
-    client = OpenAI()
+    client = get_client()
+    if client is None:
+        # Graceful fallback when not configured
+        return ("[Memories-AI] OpenAI client not configured. Set OPENAI_API_KEY or OPENAI_BASE_URL.", {})
+
     resp = client.responses.create(model=model or _get_model(), input=merged_text)
 
     text = ""
@@ -36,23 +41,27 @@ def stream_text(merged_text: str, model: Optional[str] = None) -> Generator[str,
 
     Emits lines starting with `data: ` and ends with a final `event: done`.
     """
-    client = OpenAI()
-    # The Python SDK exposes a streaming interface for Responses API
-    # We wrap deltas into SSE lines.
+    client = get_client()
+    if client is None:
+        yield "data: [Memories-AI] OpenAI client not configured. Set OPENAI_API_KEY or OPENAI_BASE_URL.\n\n"
+        yield "event: done\n\n"
+        return
+
+    # Responses API streaming
     try:
         with client.responses.stream(model=model or _get_model(), input=merged_text) as stream:
             for event in stream:
-                # We expect output_text.delta events (see Responses streaming docs)
-                if event.get("type") == "response.output_text.delta":
-                    chunk = event.get("delta", "")
-                    if chunk:
-                        yield f"data: {chunk}\n\n"
-                elif event.get("type") == "response.completed":
+                # Events can be dict-like objects; normalize access
+                et = event.get("type") if isinstance(event, dict) else getattr(event, "type", None)
+                if et == "response.output_text.delta":
+                    delta = event.get("delta") if isinstance(event, dict) else getattr(event, "delta", "")
+                    if delta:
+                        yield f"data: {delta}\n\n"
+                elif et == "response.completed":
                     break
-    except Exception as e:  # Fallback: non-stream call
+    except Exception:
+        # Fallback: non-stream call
         text, _ = complete_text(merged_text, model=model)
         if text:
             yield f"data: {text}\n\n"
-
     yield "event: done\n\n"
-

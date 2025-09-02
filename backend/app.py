@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes.chat import router as chat_router
 from .routes.memory import router as memory_router
 from .memory.manager import ensure_dirs
+from .config import init_env
 
 
 def create_app() -> FastAPI:
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _startup():
+        init_env()
         ensure_dirs()
 
     @app.get("/")
@@ -34,4 +36,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

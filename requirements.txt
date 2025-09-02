@@ -1,0 +1,8 @@
+fastapi>=0.111
+uvicorn[standard]>=0.30
+openai>=1.62
+openai-agents>=0.2.9
+pydantic>=2.8
+python-dotenv>=1.0
+apscheduler>=3.10
+

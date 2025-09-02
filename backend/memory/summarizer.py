@@ -6,21 +6,25 @@ from pathlib import Path
 from typing import Iterable
 
 from openai import OpenAI
+from ..config import get_client, model_name
 
 from .manager import list_short_files_due, short_dir
 
 
-def _client() -> OpenAI:
-    return OpenAI()
+def _client() -> OpenAI | None:
+    return get_client()
 
 
 def _model() -> str:
-    return os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    return model_name()
 
 
 def _call_summary(prompt: str, text: str) -> str:
     client = _client()
-    # Use Responses API to summarize per project requirement
+    if client is None:
+        return ""  # Graceful no-op when not configured
+
+    # Use Responses API per requirement
     resp = client.responses.create(model=_model(), input=f"{prompt}\n\n{text}")
     out = ""
     for item in (resp.output or []):
@@ -85,4 +89,3 @@ def daily_maintain() -> None:
     # 14d
     for f in list_short_files_due(days=14):
         purge_14d(f)
-
