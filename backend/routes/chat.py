@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import uuid
-from datetime import datetime
 from typing import Dict, Any
 
 from fastapi import APIRouter, HTTPException
@@ -12,12 +9,14 @@ from ..models import ChatRequest, ChatResponse
 from ..memory import manager
 from ..memory.summarizer import extract_long_fact
 from ..agent import runner as agent_runner
+from ..agent import character
 
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
 def _merge_with_memories(user_text: str) -> str:
+    # Note: streaming経路の当面のフォールバックとして残す。
     memories = manager.retrieve_texts(days=14)
     merged = (
         "[User Message]\n" + user_text.strip() + "\n\n" +
@@ -28,16 +27,16 @@ def _merge_with_memories(user_text: str) -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
-def post_chat(req: ChatRequest) -> ChatResponse:
+async def post_chat(req: ChatRequest) -> ChatResponse:
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message is empty")
 
     # Log user message to short-term memory
     manager.log_short("user", req.message)
 
-    # Merge memories and call Responses API
-    merged = _merge_with_memories(req.message)
-    text, usage = agent_runner.complete_text(merged)
+    # エージェントに「必要な時だけ思い出す」判断を委ねる
+    text = await character.run_turn(user_text=req.message, session_id=req.sessionId or "default")
+    usage = {}
 
     # Log assistant response
     manager.log_short("ai", text)
@@ -71,4 +70,3 @@ def stream_chat(message: str):
             yield chunk
 
     return StreamingResponse(sse_gen(), media_type="text/event-stream")
-
