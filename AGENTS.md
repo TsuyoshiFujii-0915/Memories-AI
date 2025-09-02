@@ -62,6 +62,7 @@
 ### バックエンド設計（Python/FastAPI）
 
 - バージョン/依存関係（例）
+
   - Python 3.10+
   - `fastapi`, `uvicorn`
   - `openai`（Responses API クライアント）
@@ -70,11 +71,13 @@
   - スケジューラ: `APScheduler` もしくは OS の cron（運用方針により選択）
 
 - 環境変数
+
   - `OPENAI_API_KEY`: OpenAI API キー
   - `OPENAI_MODEL`: 省略時は `gpt-5-mini`
   - `MEMORY_ROOT`: メモリ格納ルート（省略時は `./memory`）
 
 - ディレクトリ構成（提案）
+
   - `backend/`
     - `app.py`（FastAPI エントリ）
     - `agent/`
@@ -95,10 +98,12 @@
     - `index.json`（短期ファイルの状態・次回処理日時など）
 
 - キャラクタープロンプト（ベース）
+
   - 一般的な女性キャラクター。丁寧・親しみやすい口調。ユーザーの心情に配慮し、短く明瞭に回答。必要時のみメモリ参照ツールを呼び出す。
   - 例: 「必要だと思ったときだけ、`retrieve_memories` ツールで過去の短期/長期メモリを取り出してから回答を続ける。」
 
 - Agents SDK によるエージェント定義（概略）
+
   - エージェント本体: `Agent(name="Assistant", instructions=キャラクタープロンプト, model=OPENAI_MODEL)`
   - ツール定義（関数ツール）
     - `retrieve_memories(query?: str, days?: int)`
@@ -108,11 +113,14 @@
       - 概要: 重要/反復/印象的な事項を極小要約として `long-term.md` に追記。
       - 実装: 重複検知のためハッシュ（指紋）を併記。
   - セッション
-    - 単一ユーザーかつ単一セッション前提のため、固定セッションID（例: `default`）。
+
+    - 単一ユーザーかつ単一セッション前提のため、固定セッション ID（例: `default`）。
     - 必要に応じて Agents SDK の `SQLiteSession` をオプション採用（トークン節約）。
 
   - Responses API 呼び出し（要点）
+
     - 基本形（同期）
+
       ```python
       from openai import OpenAI
       client = OpenAI()
@@ -131,14 +139,17 @@
                           return part.get("text")
           return ""
       ```
+
     - ストリーミングは初期から SSE で提供する。
 
 - メモリ設計（ファイル仕様）
+
   - 短期メモリ（`memory/short/YYYY-MM-DD.md`）
     - 形式: Markdown。タイムスタンプと話者を付与し、会話を時系列追記。
     - 例:
       ```md
       # 2025-09-01 (short-term)
+
       - [10:02] user: 今日は少し疲れています。
       - [10:03] ai: 無理せずいきましょう。何が一番負担ですか？
       ```
@@ -150,30 +161,35 @@
       - 2025-09-01 | avoid: 大きな音が苦手 | #dislikes | fp:a9ff...
       ```
   - インデックス（`memory/index.json`）
-    - 各日次ファイルの「作成日時」「3日/7日/14日の処理予定日時」「状態（raw/3d/7d/deleted）」などを保持。
+    - 各日次ファイルの「作成日時」「3 日/7 日/14 日の処理予定日時」「状態（raw/3d/7d/deleted）」などを保持。
 
 - メモリのライフサイクル（要件準拠）
+
   - T+0: 短期メモリとして記録。
-  - T+3日: 短期メモリを要約（`YYYY-MM-DD.summary.3d.md` を作成 or 該当ファイル末尾に Summary セクション追記）。
-  - T+7日: さらに簡潔に要約（`YYYY-MM-DD.summary.7d.md` を作成 or 置換）。
-  - T+14日: 原文・要約含め短期メモリを完全削除。
+  - T+3 日: 短期メモリを要約（`YYYY-MM-DD.summary.3d.md` を作成 or 該当ファイル末尾に Summary セクション追記）。
+  - T+7 日: さらに簡潔に要約（`YYYY-MM-DD.summary.7d.md` を作成 or 置換）。
+  - T+14 日: 原文・要約含め短期メモリを完全削除。
   - 長期メモリは基本削除しない。
 
 - メモリ参照のトリガ（「思い出す」）
+
   - エージェントは通常の応答生成前に、必要と判断した場合のみ `retrieve_memories` ツールを呼ぶ。
   - ツール結果のテキストをユーザー入力と結合し、Responses API に渡す入力（merged_text）とする。
   - これにより「必要なときだけ思い出す」という要件と、「テキストとして統合して LLM に渡す」という技術要件を同時に満たす。
 
 - 要約/抽出（Responses API プロンプト指針）
-  - 3日要約: 「会話の要点をMarkdown 箇条書きで5行以内、固有名詞と好悪のみ強調」
-  - 7日要約: 「さらに圧縮。固有名詞/習慣/好悪のみに限定。3行以内」
-  - 長期抽出: 「ユーザー個性/好悪/繰返し言及/喜怒哀楽を極小要約で1-2行、カテゴリ付与（like/dislike/habit/other）」
+
+  - 3 日要約: 「会話の要点を Markdown 箇条書きで 5 行以内、固有名詞と好悪のみ強調」
+  - 7 日要約: 「さらに圧縮。固有名詞/習慣/好悪のみに限定。3 行以内」
+  - 長期抽出: 「ユーザー個性/好悪/繰返し言及/喜怒哀楽を極小要約で 1-2 行、カテゴリ付与（like/dislike/habit/other）」
 
 - バックグラウンド処理（スケジューリング）
-  - `APScheduler` で 1日1回（深夜帯）に `index.json` をスキャンし、期限に達したファイルを Responses API で要約→保存/削除。
-  - 代替: OS の cron で `python -m backend.memory.summarizer` を1日1回実行。
+
+  - `APScheduler` で 1 日 1 回（深夜帯）に `index.json` をスキャンし、期限に達したファイルを Responses API で要約 → 保存/削除。
+  - 代替: OS の cron で `python -m backend.memory.summarizer` を 1 日 1 回実行。
 
 - API エンドポイント（案）
+
   - `POST /api/chat`
     - 入力: `{ message: string, sessionId?: string }`
     - 処理: Agents SDK Runner でツール利用を許可。ツールで取得したメモリを結合し Responses API で応答生成。短期メモリに追記、必要なら長期抽出。
@@ -190,26 +206,31 @@
 ### フロントエンド設計（TypeScript/React）
 
 - 技術スタック
+
   - Vite + React + TypeScript
   - 状態管理は軽量（React 内部 state / Context）
 
   - UI 仕様
-    - 画面下部: 入力フィールド（送信ボタン/Enter送信）
+
+    - 画面下部: 入力フィールド（送信ボタン/Enter 送信）
     - 入力欄上: セッション内のメッセージリスト（ユーザー/AI の吹き出し）
-    - 右側: キャラクター画像表示枠（初期はダミー画像、将来的に動画/CGに拡張可）
+    - 右側: キャラクター画像表示枠（初期はダミー画像、将来的に動画/CG に拡張可）
     - 背景: `#A1C1E6`、テキスト: `#101010`
+    - 全体的に可愛いデザイン
 
   - API 通信
     - 初期から `EventSource` で `/api/chat/stream` を購読してストリーム表示。
     - 必要に応じて `POST /api/chat` をフォールバック用に提供する。
 
 - コンポーネント（例）
+
   - `ChatApp`（全体）
   - `MessageList`（メッセージ描画）
   - `Composer`（入力欄）
   - `SidePanel`（キャラクター画像）
 
 - 型/モデル
+
   - `Message = { id: string, role: 'user'|'assistant', text: string, at: string }`
   - `ChatResponse = { message: string, usage?: any, memoryActions?: any }`
 
@@ -219,6 +240,7 @@
 ### 実装スニペット（抜粋）
 
 - Agents SDK: ツール定義とラン（概念例）
+
   ```python
   # backend/agent/character.py
   from agents import Agent, Runner, function_tool
@@ -248,6 +270,7 @@
   ```
 
 - Responses API: 応答生成（メモリ結合後）
+
   ```python
   # backend/agent/runner.py
   from openai import OpenAI
@@ -264,7 +287,8 @@
       return ""
   ```
 
-- 短期→要約→削除のスケジュール実行
+- 短期 → 要約 → 削除のスケジュール実行
+
   ```python
   # backend/memory/summarizer.py
   from datetime import datetime, timedelta
@@ -284,7 +308,7 @@
 
 ### 運用・非機能
 
-- ログ: API 呼び出し・ツール実行・ファイルI/O を INFO/DEBUG で記録。
+- ログ: API 呼び出し・ツール実行・ファイル I/O を INFO/DEBUG で記録。
 - レート制御: 必要に応じて単純なリクエスト間隔制御を導入。
 - 国際化: まず日本語優先。英語メッセージも最小限で併記可能。
 
