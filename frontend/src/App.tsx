@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import avatarSvg from './assets/avatar.svg'
 
 type Message = { id: string, role: 'user'|'assistant', text: string, at: string }
 
@@ -40,10 +41,12 @@ function Composer({ onSend }: { onSend: (t: string) => void }) {
 }
 
 function SidePanel() {
+  const url = (import.meta as any).env?.VITE_CHARACTER_IMAGE_URL as string | undefined
+  const src = url || avatarSvg
   return (
     <div className="side">
       <div className="avatar">
-        <div className="avatar-img" />
+        <img className="avatar-img" src={src} alt="character" />
         <div className="avatar-caption">Assistant</div>
       </div>
     </div>
@@ -92,4 +95,3 @@ export default function ChatApp() {
     </div>
   )
 }
-
