@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pathlib import Path
 
 from ..memory.manager import ensure_dirs, retrieve_texts, short_dir, long_dir
+from ..memory.summarizer import daily_maintain
 
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
@@ -31,3 +32,10 @@ def get_long():
         return {"content": ""}
     return {"content": p.read_text(encoding="utf-8")}
 
+
+@router.post("/memory/maintain")
+def run_maintenance():
+    """Run 3d/7d summarization and 14d purge once and return processed files."""
+    ensure_dirs()
+    stats = daily_maintain()
+    return {"ok": True, "stats": stats}

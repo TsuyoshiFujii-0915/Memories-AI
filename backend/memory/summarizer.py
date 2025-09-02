@@ -79,13 +79,28 @@ def extract_long_fact(user_and_ai_text: str) -> str:
     return _call_summary(prompt, user_and_ai_text)
 
 
-def daily_maintain() -> None:
-    # 3d
+def daily_maintain() -> dict:
+    """Scan short-term files and perform 3d/7d summarization and 14d purge.
+
+    Returns a summary dict with paths processed for each stage.
+    """
+    processed_3d: list[str] = []
+    processed_7d: list[str] = []
+    purged_14d: list[str] = []
+
     for f in list_short_files_due(days=3):
         summarize_to_3d(f)
-    # 7d
+        processed_3d.append(str(f))
     for f in list_short_files_due(days=7):
         summarize_to_7d(f)
-    # 14d
+        processed_7d.append(str(f))
     for f in list_short_files_due(days=14):
         purge_14d(f)
+        purged_14d.append(str(f))
+
+    return {"summarized_3d": processed_3d, "summarized_7d": processed_7d, "purged_14d": purged_14d}
+
+
+if __name__ == "__main__":
+    stats = daily_maintain()
+    print({k: len(v) for k, v in stats.items()})
